@@ -1,0 +1,5 @@
+{
+  "name": "Balance Forecast",
+  "description": "A simple financial projector to calculate your month-end balance by tracking income and scheduled payments. Features AI-powered financial advice.",
+  "requestFramePermissions": []
+}
