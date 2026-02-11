@@ -143,7 +143,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                     承認済みドメインの追加
                 </h5>
                 <div className="pl-6 space-y-2">
-                    <p>Firebase Console > Authentication > 設定 > 承認済みドメイン に以下を追加しましたか？</p>
+                    <p>Firebase Console &gt; Authentication &gt; 設定 &gt; 承認済みドメイン に以下を追加しましたか？</p>
                     <div className="flex items-center gap-2">
                         <input
                             type="text"
@@ -165,7 +165,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                 </h5>
                 <div className="pl-6 bg-red-50 p-3 rounded border border-red-100 space-y-2">
                     <p className="font-bold text-red-700">これが一番多い原因です！</p>
-                    <p>Firestore Database > ルール タブ を開き、読み書きを許可していますか？</p>
+                    <p>Firestore Database &gt; ルール タブ を開き、読み書きを許可していますか？</p>
                     <pre className="bg-white p-2 text-[9px] rounded border border-red-100 font-mono text-gray-500">
 {`allow read, write: if request.auth != null;`}
                     </pre>
@@ -178,7 +178,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                     <span className="bg-gray-800 text-white w-4 h-4 rounded-full flex items-center justify-center text-[10px]">3</span>
                     Googleログインの有効化
                 </h5>
-                <p className="pl-6">Authentication > ログイン方法 で「Google」が<strong className="text-blue-600">有効</strong>になっていますか？</p>
+                <p className="pl-6">Authentication &gt; ログイン方法 で「Google」が<strong className="text-blue-600">有効</strong>になっていますか？</p>
             </div>
         </div>
     </div>

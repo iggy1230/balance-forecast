@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Transaction, FinancialSummary, BackupData, FirebaseConfig, UserInfo } from './types';
 import { BalanceCard } from './components/BalanceCard';
@@ -11,48 +9,38 @@ import { DataSyncModal } from './components/DataSyncModal';
 import { CloudSyncModal } from './components/CloudSyncModal';
 import { initFirebase, subscribeToAuth, subscribeToUserData, saveUserData, fetchUserData } from './services/firebase';
 import { staticFirebaseConfig } from './firebaseConfig';
-// Added AlertCircle to imports
-import { LayoutDashboard, ArrowRightLeft, Cloud, CheckCircle2, Loader2, AlertTriangle, RefreshCw, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, ArrowRightLeft, Cloud, CheckCircle2, Loader2, AlertTriangle, RefreshCw, AlertCircle, Wallet, TrendingDown, TrendingUp } from 'lucide-react';
 
 const STORAGE_KEY_TRANSACTIONS = 'balance-app-transactions';
 const STORAGE_KEY_START_BALANCE = 'balance-app-start-balance';
 const STORAGE_KEY_MONTH_OVERRIDES = 'balance-app-month-overrides';
 const STORAGE_KEY_FIREBASE_CONFIG = 'balance-app-firebase-config';
 
-const DEFAULT_CANDIDATES = ["食費", "日用品", "交通費", "家賃", "水道光熱費", "通信費", "娯楽費", "外食", "給与", "賞与"];
+const DEFAULT_CANDIDATES = ["給与", "家賃", "食費", "光熱費", "通信費", "日用品", "交通費", "娯楽費", "保険", "賞与"];
 
 const App: React.FC = () => {
-  // State initialization
   const [baseStartBalance, setBaseStartBalance] = useState<number>(0);
   const [monthOverrides, setMonthOverrides] = useState<Record<string, number>>({});
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
-  
-  // View Month State
   const [viewDate, setViewDate] = useState(new Date());
-
-  // Modals
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [showCloudModal, setShowCloudModal] = useState(false);
-
-  // Firebase State
   const [firebaseConfig, setFirebaseConfig] = useState<FirebaseConfig | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
-  
-  // Sync Status
   const [syncStatus, setSyncStatus] = useState<'synced' | 'saving' | 'error' | 'idle'>('idle');
   const [lastError, setLastError] = useState<string | null>(null);
   const isReceivingCloudData = useRef(false);
   const isFirstFetchDone = useRef(false);
 
-  // 1. Initial Load
   useEffect(() => {
     const savedTransactions = localStorage.getItem(STORAGE_KEY_TRANSACTIONS);
     const savedBalance = localStorage.getItem(STORAGE_KEY_START_BALANCE);
     const savedOverrides = localStorage.getItem(STORAGE_KEY_MONTH_OVERRIDES);
     
     let configToUse: FirebaseConfig | null = staticFirebaseConfig;
-    if (!configToUse) {
+    if (!configToUse || configToUse.apiKey.includes("ここに")) {
+      configToUse = null;
       const savedConfig = localStorage.getItem(STORAGE_KEY_FIREBASE_CONFIG);
       if (savedConfig) {
         try { configToUse = JSON.parse(savedConfig); } catch(e) {}
@@ -75,7 +63,6 @@ const App: React.FC = () => {
     setIsInitialized(true);
   }, []);
 
-  // 2. Firebase Auth Listener
   useEffect(() => {
     if (!firebaseConfig) return;
     const unsubscribe = subscribeToAuth((firebaseUser) => {
@@ -95,10 +82,8 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, [firebaseConfig]);
 
-  // 3. Firestore Data Listener
   useEffect(() => {
     if (!user) return;
-
     const checkAndInitCloud = async () => {
        try {
          const cloudData = await fetchUserData(user.uid);
@@ -109,9 +94,8 @@ const App: React.FC = () => {
          }
          isFirstFetchDone.current = true;
        } catch (err: any) {
-         console.error("Cloud fetch error:", err);
          setSyncStatus('error');
-         setLastError(err.message?.includes('permission-denied') ? 'データベースの保存期限切れ、または権限エラーです。設定を確認してください。' : 'サーバーとの通信に失敗しました。');
+         setLastError('通信エラーが発生しました。');
        }
     };
     checkAndInitCloud();
@@ -128,14 +112,11 @@ const App: React.FC = () => {
         setTimeout(() => { isReceivingCloudData.current = false; }, 300);
       }
     });
-
     return () => unsubscribe();
   }, [user]);
 
-  // 4. Save to LocalStorage AND Cloud
   useEffect(() => {
     if (!isInitialized) return;
-
     localStorage.setItem(STORAGE_KEY_TRANSACTIONS, JSON.stringify(transactions));
     localStorage.setItem(STORAGE_KEY_START_BALANCE, baseStartBalance.toString());
     localStorage.setItem(STORAGE_KEY_MONTH_OVERRIDES, JSON.stringify(monthOverrides));
@@ -146,42 +127,14 @@ const App: React.FC = () => {
          try {
            await saveUserData(user.uid, { startBalance: baseStartBalance, transactions, monthOverrides });
            setSyncStatus('synced');
-           setLastError(null);
          } catch (err: any) {
-           console.error("Save failed:", err);
            setSyncStatus('error');
-           if (err.message?.includes('permission-denied')) {
-             setLastError('保存権限がありません。Firestoreのルール設定を確認してください。');
-           } else {
-             setLastError('データの保存中にエラーが発生しました。');
-           }
          }
       }, 1500);
       return () => clearTimeout(timer);
     }
   }, [transactions, baseStartBalance, monthOverrides, isInitialized, user]);
 
-  const handleRetrySync = async () => {
-    if (!user) return;
-    setSyncStatus('saving');
-    setLastError(null);
-    try {
-      const cloudData = await fetchUserData(user.uid);
-      if (cloudData) {
-        setBaseStartBalance(cloudData.startBalance);
-        setTransactions(cloudData.transactions);
-        setMonthOverrides(cloudData.monthOverrides || {});
-      } else {
-        await saveUserData(user.uid, { startBalance: baseStartBalance, transactions, monthOverrides });
-      }
-      setSyncStatus('synced');
-    } catch (err: any) {
-      setSyncStatus('error');
-      setLastError('再試行に失敗しました。');
-    }
-  };
-
-  // Monthly Rolling Logic
   const summary: FinancialSummary = useMemo(() => {
     const year = viewDate.getFullYear();
     const month = viewDate.getMonth();
@@ -235,11 +188,6 @@ const App: React.FC = () => {
     };
   }, [baseStartBalance, transactions, viewDate, monthOverrides]);
 
-  const historyCandidates = useMemo(() => {
-    const historyDescriptions = transactions.map(t => t.description).filter(d => d.trim() !== '');
-    return Array.from(new Set([...DEFAULT_CANDIDATES, ...historyDescriptions]));
-  }, [transactions]);
-
   const filteredTransactions = useMemo(() => {
     const year = viewDate.getFullYear();
     const month = viewDate.getMonth();
@@ -249,54 +197,9 @@ const App: React.FC = () => {
     });
   }, [transactions, viewDate]);
 
-  const handleMonthChange = (offset: number) => {
-    const newDate = new Date(viewDate);
-    newDate.setMonth(newDate.getMonth() + offset);
-    setViewDate(newDate);
-  };
-
-  const handleStartBalanceUpdate = (newVal: number | null) => {
-    const year = viewDate.getFullYear();
-    const month = viewDate.getMonth();
-    const key = `${year}-${String(month + 1).padStart(2, '0')}`;
-    const sortedAll = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const earliestMonth = sortedAll.length > 0 ? new Date(sortedAll[0].date) : viewDate;
-    const isFirstMonth = year === earliestMonth.getFullYear() && month === earliestMonth.getMonth();
-    if (newVal === null) {
-      const newOverrides = { ...monthOverrides };
-      delete newOverrides[key];
-      setMonthOverrides(newOverrides);
-    } else {
-      if (isFirstMonth) {
-          setBaseStartBalance(newVal);
-          const newOverrides = { ...monthOverrides };
-          delete newOverrides[key];
-          setMonthOverrides(newOverrides);
-      } else {
-          setMonthOverrides(prev => ({ ...prev, [key]: newVal }));
-      }
-    }
-  };
-
   const handleAddTransaction = (newTx: Omit<Transaction, 'id'>) => {
     const transaction: Transaction = { ...newTx, id: crypto.randomUUID() };
     setTransactions(prev => [...prev, transaction]);
-  };
-
-  const handleUpdateTransaction = (updatedTx: Transaction) => {
-    setTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
-  };
-
-  const handleDeleteTransaction = (id: string) => {
-    setTransactions(prev => prev.filter(t => t.id !== id));
-  };
-
-  const handleImportData = (data: BackupData) => {
-    if (window.confirm('現在のデータは上書きされます。よろしいですか？')) {
-      setBaseStartBalance(data.startBalance);
-      setTransactions(data.transactions);
-      setMonthOverrides(data.monthOverrides || {});
-    }
   };
 
   const defaultFormDate = useMemo(() => {
@@ -308,129 +211,124 @@ const App: React.FC = () => {
     return d.toISOString().split('T')[0];
   }, [viewDate]);
 
+  // 支出割合の計算
+  const spendingRatio = useMemo(() => {
+    const totalResource = summary.startBalance + summary.totalIncome;
+    if (totalResource <= 0) return summary.totalExpense > 0 ? 100 : 0;
+    return Math.min(100, Math.round((summary.totalExpense / totalResource) * 100));
+  }, [summary]);
+
   if (!isInitialized) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans text-gray-900 pb-20">
+    <div className="min-h-screen pb-20 bg-[#F8FAFC]">
       <header className="bg-white shadow-sm sticky top-0 z-10 border-b border-gray-100">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-blue-600 text-white p-2 rounded-lg shadow-sm">
-              <LayoutDashboard size={22} />
+          <div className="flex items-center gap-3">
+            <div className="bg-indigo-600 text-white p-2 rounded-xl shadow-lg shadow-indigo-100">
+              <Wallet size={20} />
             </div>
             <div>
-              <h1 className="text-lg font-black text-gray-800 leading-tight">Balance Forecast</h1>
+              <h1 className="text-base font-black text-gray-900 leading-tight tracking-tight">残高予測マネージャー</h1>
               <div className="flex items-center gap-1">
                 {user ? (
-                  <div className={`flex items-center gap-1.5 text-[10px] font-bold ${syncStatus === 'error' ? 'text-red-500' : 'text-blue-500'}`}>
-                    {syncStatus === 'saving' && <Loader2 size={10} className="animate-spin" />}
-                    {syncStatus === 'synced' && <CheckCircle2 size={10} />}
-                    {syncStatus === 'error' && <AlertTriangle size={10} />}
-                    <span>{syncStatus === 'saving' ? '同期中...' : syncStatus === 'error' ? '同期エラー' : 'クラウド同期済み'}</span>
-                    {syncStatus === 'error' && (
-                      <button 
-                        onClick={handleRetrySync}
-                        className="ml-1 bg-red-100 p-0.5 rounded hover:bg-red-200 transition-colors"
-                        title="再試行"
-                      >
-                        <RefreshCw size={8} />
-                      </button>
-                    )}
+                  <div className={`flex items-center gap-1 text-[10px] font-bold ${syncStatus === 'error' ? 'text-rose-500' : 'text-indigo-500'}`}>
+                    {syncStatus === 'saving' ? <Loader2 size={10} className="animate-spin" /> : <CheckCircle2 size={10} />}
+                    <span>{syncStatus === 'saving' ? '保存中...' : 'クラウド同期済み'}</span>
                   </div>
                 ) : (
-                   <span className="text-[10px] text-gray-400 font-bold tracking-tight">ローカル保存モード</span>
+                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Local Mode</span>
                 )}
               </div>
             </div>
           </div>
-          <div className="flex gap-1.5">
-            <button 
-                onClick={() => setShowCloudModal(true)}
-                className={`p-2 rounded-xl transition-all flex items-center gap-2 relative ${
-                    user 
-                    ? 'text-blue-600 bg-blue-50 hover:bg-blue-100 shadow-sm border border-blue-100' 
-                    : 'text-gray-400 hover:text-blue-600 hover:bg-gray-100 border border-transparent'
-                }`}
-                title="クラウド同期設定"
-            >
-                <Cloud size={20} />
-                {user?.photoURL && (
-                   <img src={user.photoURL} className="w-5 h-5 rounded-full ring-2 ring-white" alt="Account" />
-                )}
-            </button>
-            <button 
-                onClick={() => setShowSyncModal(true)}
-                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-gray-100 rounded-xl transition-all border border-transparent"
-                title="データバックアップ"
-            >
-                <ArrowRightLeft size={20} />
-            </button>
+          <div className="flex gap-1">
+            <button onClick={() => setShowCloudModal(true)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"><Cloud size={20} /></button>
+            <button onClick={() => setShowSyncModal(true)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"><ArrowRightLeft size={20} /></button>
           </div>
         </div>
-        {lastError && (
-          <div className="bg-red-50 text-red-600 text-[10px] py-1 px-4 text-center font-medium flex items-center justify-center gap-2 animate-in slide-in-from-top-1">
-            <AlertCircle size={10} /> {lastError}
-            <button onClick={() => setShowCloudModal(true)} className="underline font-bold">設定を確認</button>
-          </div>
-        )}
       </header>
 
-      <main className="max-w-3xl mx-auto px-4 py-6">
+      <main className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+        {/* 月末予想サマリー */}
+        <div className="relative overflow-hidden bg-indigo-600 text-white p-6 rounded-[2rem] shadow-xl shadow-indigo-200">
+          <div className="relative z-10">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <p className="text-indigo-100 text-xs font-bold uppercase tracking-wider mb-1">今月末の予想残高</p>
+                <p className="text-4xl font-black">¥{summary.projectedBalance.toLocaleString()}</p>
+              </div>
+              <div className={`px-4 py-1.5 rounded-full text-xs font-black flex items-center gap-1.5 border border-white/20 ${summary.projectedBalance >= 0 ? 'bg-white/20' : 'bg-rose-500/40'}`}>
+                {summary.projectedBalance >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                {summary.projectedBalance >= 0 ? '黒字予想' : '赤字注意'}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between items-end text-xs font-bold">
+                <span className="text-indigo-100">資金消化率</span>
+                <span>{spendingRatio}%</span>
+              </div>
+              <div className="h-2.5 w-full bg-white/20 rounded-full overflow-hidden">
+                <div 
+                  className={`progress-bar-fill h-full rounded-full ${spendingRatio > 90 ? 'bg-rose-400' : spendingRatio > 70 ? 'bg-amber-400' : 'bg-emerald-400'}`} 
+                  style={{ width: `${spendingRatio}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-indigo-100/70 font-medium">※（月初残高＋収入）に対する支出予定の割合</p>
+            </div>
+          </div>
+          
+          {/* 装飾用背景 */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-400/20 rounded-full blur-2xl -ml-10 -mb-10"></div>
+        </div>
+
         <BalanceCard 
           summary={summary} 
-          onStartBalanceChange={handleStartBalanceUpdate} 
+          onStartBalanceChange={(val) => {
+            const year = viewDate.getFullYear();
+            const month = viewDate.getMonth();
+            const key = `${year}-${String(month + 1).padStart(2, '0')}`;
+            if (val === null) {
+              const newOverrides = { ...monthOverrides };
+              delete newOverrides[key];
+              setMonthOverrides(newOverrides);
+            } else {
+              setMonthOverrides(prev => ({ ...prev, [key]: val }));
+            }
+          }} 
           currentDate={viewDate}
-          onMonthChange={handleMonthChange}
+          onMonthChange={(offset) => {
+            const d = new Date(viewDate);
+            d.setMonth(d.getMonth() + offset);
+            setViewDate(d);
+          }}
         />
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div className="md:order-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-6">
             <TransactionForm 
               onAdd={handleAddTransaction} 
-              historyCandidates={historyCandidates}
+              historyCandidates={Array.from(new Set([...DEFAULT_CANDIDATES, ...transactions.map(t => t.description)]))}
               allTransactions={transactions}
               defaultDate={defaultFormDate}
             />
             <ChartSection transactions={filteredTransactions} />
           </div>
-          <div className="md:order-1">
+          <div className="space-y-6">
             <TransactionList 
               transactions={filteredTransactions} 
-              onDelete={handleDeleteTransaction}
-              onUpdate={handleUpdateTransaction}
+              onDelete={(id) => setTransactions(prev => prev.filter(t => t.id !== id))}
+              onUpdate={(updated) => setTransactions(prev => prev.map(t => t.id === updated.id ? updated : t))}
             />
+            <AiAdvisor transactions={filteredTransactions} summary={summary} />
           </div>
         </div>
-
-        <AiAdvisor transactions={filteredTransactions} summary={summary} />
       </main>
 
-      <DataSyncModal 
-        isOpen={showSyncModal} 
-        onClose={() => setShowSyncModal(false)}
-        currentData={{ startBalance: baseStartBalance, transactions, monthOverrides }}
-        onImport={handleImportData}
-      />
-
-      <CloudSyncModal
-        isOpen={showCloudModal}
-        onClose={() => setShowCloudModal(false)}
-        user={user}
-        onConfigSave={(cfg) => {
-          setFirebaseConfig(cfg);
-          localStorage.setItem(STORAGE_KEY_FIREBASE_CONFIG, JSON.stringify(cfg));
-          initFirebase(cfg);
-        }}
-        hasConfig={!!firebaseConfig}
-        onClearConfig={() => {
-          setFirebaseConfig(null);
-          setUser(null);
-          localStorage.removeItem(STORAGE_KEY_FIREBASE_CONFIG);
-          setShowCloudModal(false);
-        }}
-        currentConfig={firebaseConfig}
-        isStatic={!!staticFirebaseConfig}
-      />
+      <DataSyncModal isOpen={showSyncModal} onClose={() => setShowSyncModal(false)} currentData={{ startBalance: baseStartBalance, transactions, monthOverrides }} onImport={(d) => { setBaseStartBalance(d.startBalance); setTransactions(d.transactions); setMonthOverrides(d.monthOverrides || {}); }} />
+      <CloudSyncModal isOpen={showCloudModal} onClose={() => setShowCloudModal(false)} user={user} onConfigSave={(cfg) => { setFirebaseConfig(cfg); localStorage.setItem(STORAGE_KEY_FIREBASE_CONFIG, JSON.stringify(cfg)); initFirebase(cfg); }} hasConfig={!!firebaseConfig} onClearConfig={() => { setFirebaseConfig(null); setUser(null); localStorage.removeItem(STORAGE_KEY_FIREBASE_CONFIG); }} currentConfig={firebaseConfig} isStatic={!!staticFirebaseConfig} />
     </div>
   );
 };
