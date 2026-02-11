@@ -1,13 +1,14 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { Transaction, FinancialSummary } from "../types";
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const analyzeFinances = async (
   transactions: Transaction[],
   summary: FinancialSummary
 ): Promise<string> => {
+  // ガイドラインに従い、リクエストのタイミングでインスタンスを作成します。
+  // process.env.API_KEY は実行環境から提供されます。
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+
   try {
     const transactionHistory = transactions
       .map(t => `- ${t.date}: ${t.description} (${t.type}) - ¥${t.amount.toLocaleString()}`)
@@ -33,13 +34,9 @@ export const analyzeFinances = async (
       Keep the response concise (under 200 words) and format it with clear bullet points or short paragraphs. Use Japanese language.
     `;
 
-    // Using gemini-3-flash-preview for basic text analysis as per guidelines
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: {
-        thinkingConfig: { thinkingBudget: 0 } // Disable thinking for faster response on simple advice
-      }
     });
 
     return response.text || "アドバイスを生成できませんでした。";
