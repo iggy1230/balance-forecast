@@ -5,33 +5,35 @@ export const analyzeFinances = async (
   transactions: Transaction[],
   summary: FinancialSummary
 ): Promise<string> => {
-  // ガイドラインに従い、リクエストのタイミングでインスタンスを作成します。
-  // process.env.API_KEY は実行環境から提供されます。
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+  // ガイドラインに従い、関数が呼ばれたタイミングでAPIキーをチェックし初期化します。
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("APIキーが設定されていません。");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
 
   try {
     const transactionHistory = transactions
-      .map(t => `- ${t.date}: ${t.description} (${t.type}) - ¥${t.amount.toLocaleString()}`)
+      .map(t => `- ${t.date}: ${t.description} (${t.type === 'income' ? '収入' : '支出'}) - ¥${t.amount.toLocaleString()}`)
       .join('\n');
 
     const prompt = `
-      You are a friendly and practical financial advisor. Analyze the following monthly financial snapshot for a user living in Japan.
+      あなたは親しみやすく的確なファイナンシャルアドバイザーです。以下の家計状況を分析し、日本語でアドバイスをください。
       
-      Summary:
-      - Starting Balance: ¥${summary.startBalance.toLocaleString()}
-      - Total Income: ¥${summary.totalIncome.toLocaleString()}
-      - Total Expenses: ¥${summary.totalExpense.toLocaleString()}
-      - Projected Month-End Balance: ¥${summary.projectedBalance.toLocaleString()}
+      状況サマリー:
+      - 月初残高: ¥${summary.startBalance.toLocaleString()}
+      - 収入合計: ¥${summary.totalIncome.toLocaleString()}
+      - 支出合計: ¥${summary.totalExpense.toLocaleString()}
+      - 月末予想残高: ¥${summary.projectedBalance.toLocaleString()}
 
-      Transaction Details:
+      明細データ:
       ${transactionHistory}
 
-      Please provide:
-      1. A brief assessment of the financial health (Good, Tight, or Risky).
-      2. One specific actionable tip to improve savings or manage cash flow better based on the specific entries provided.
-      3. A short encouraging closing remark.
-
-      Keep the response concise (under 200 words) and format it with clear bullet points or short paragraphs. Use Japanese language.
+      以下の3点について、簡潔に（200文字程度で）回答してください：
+      1. 現在の収支バランスの評価（良好、注意、または危険）。
+      2. 具体的な改善アクション（節約のヒントや資金繰りのアドバイス）。
+      3. 短く前向きな応援メッセージ。
     `;
 
     const response = await ai.models.generateContent({
