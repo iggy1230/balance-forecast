@@ -5,12 +5,15 @@ export const analyzeFinances = async (
   transactions: Transaction[],
   summary: FinancialSummary
 ): Promise<string> => {
-  // ガイドラインに従い、関数が呼ばれたタイミングでAPIキーをチェックし初期化します。
+  // 環境変数からAPIキーを取得
   const apiKey = process.env.API_KEY;
+  
   if (!apiKey) {
-    throw new Error("APIキーが設定されていません。");
+    console.error("API_KEY is not defined in process.env");
+    throw new Error("AI診断をご利用いただくにはAPIキーの設定が必要です。");
   }
 
+  // リクエストのたびに新しいインスタンスを生成して最新のキーを使用
   const ai = new GoogleGenAI({ apiKey });
 
   try {
