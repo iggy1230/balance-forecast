@@ -3,17 +3,13 @@ import { FirebaseConfig } from "./types";
 
 /**
  * Firebaseコンソールで取得した設定をここに貼り付けてください。
- * 
- * 設定方法:
- * 1. Firebase Console > プロジェクト設定 > マイアプリ > Webアプリ 
- * 2. firebaseConfig オブジェクトの内容を以下に反映
  */
 export const staticFirebaseConfig: FirebaseConfig | null = {
-  apiKey: "ここにAPI_KEYを貼り付け",
-  authDomain: "プロジェクトID.firebaseapp.com",
-  projectId: "プロジェクトID",
-  storageBucket: "プロジェクトID.firebasestorage.app",
-  messagingSenderId: "数値ID",
-  appId: "1:数値ID:web:識別子",
-  measurementId: "G-XXXXXXXXXX" // 任意
+  apiKey: "AIzaSyAzSOAHtcklM8kgX7nN6EaI4W6k5u4VRtc",
+  authDomain: "webapp-facd4.firebaseapp.com",
+  projectId: "webapp-facd4",
+  storageBucket: "webapp-facd4.firebasestorage.app",
+  messagingSenderId: "548730013500",
+  appId: "1:548730013500:web:b0159a76269e556712c039",
+  measurementId: "G-S894XJVM2R" 
 };
